@@ -1,13 +1,10 @@
-# meanshift-kmeans-cluster
-Utilize Mean-Shift to generate initial centroids for K-Means 
-![image](https://github.com/DemonDamon/tongdaxin-futures-data-clearing-database-operation/blob/master/data-mongod.jpg)
-
 # meanshift-kmeans聚类
 
 
 -------------------------------
 
-## * 简介
+## * 流程图
+ ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei4.jpg)
 
 
 
