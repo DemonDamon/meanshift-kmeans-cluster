@@ -4,7 +4,7 @@
 -------------------------------
 
 ## * 流程图
- ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei4.jpg)
+ ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei4.png)
 
 
 
