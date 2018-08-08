@@ -307,7 +307,7 @@ class msk:
 
 			else:
 				# use K-Means to cluster Mean-Shift centroids
-				kmeans = KMeans(init='random', n_clusters=max(cluster_num,n_clusters_), max_iter=1000, n_init=10)
+				kmeans = KMeans(init='random', n_clusters=min(cluster_num,n_clusters_), max_iter=1000, n_init=10)
 				output_label = kmeans.fit_predict(data) 
 				cluster_centers = kmeans.cluster_centers_
 
