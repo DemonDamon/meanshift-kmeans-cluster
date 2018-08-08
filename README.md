@@ -16,6 +16,6 @@
 
 
 ## * 结果图
+ ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei1.png)
  ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei2.png)
- ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei2-2.png)
- ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei2-3.png)
+ ![image](https://github.com/DemonDamon/meanshift-kmeans-cluster/blob/master/wei3.png)
