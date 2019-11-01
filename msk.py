@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,8 +11,8 @@ plt.rcParams['axes.unicode_minus']=False
 
 import seaborn as sns
 sns.set_style("darkgrid",{"font.sans-serif":['simhei','Droid Sans Fallback']})
-plt.rcParams['savefig.dpi'] = 300 
-plt.rcParams['figure.dpi'] = 300 
+plt.rcParams['savefig.dpi'] = 100 
+plt.rcParams['figure.dpi'] = 100 
 
 from sklearn import metrics
 from sklearn.cluster import KMeans, FeatureAgglomeration
@@ -19,8 +22,16 @@ from sklearn import preprocessing
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from sklearn.datasets.samples_generator import make_blobs
 from sklearn.metrics import silhouette_samples, silhouette_score
+from sklearn.datasets.samples_generator import make_blobs
+from sklearn.ensemble import IsolationForest
 
 from itertools import cycle
+import glob
+import pickle
+import os
+
+#去掉科学计数法
+pd.set_option('display.expand_frame_repr', False)
 
 class msk:
 	def __init__(self,data,Standardized_method=['minmax',0,1],reduced_n_dim=None,reduced_method='PCA'):
@@ -55,15 +66,15 @@ class msk:
 
 		self.data.drop(drop_list,inplace=True) 
 
-		print("  -  clear NULL data ")
+		print("  ----  clear NULL data ")
 
 		if self.Standardized_method[0] == 'minmax':
-			print("  -  utilize MINMAX standardized method ")
+			print("  ----  utilize MINMAX standardized method ")
 			self.data = (self.data - self.data.min()) / (self.data.max() - self.data.min())
 			self.data = self.data * (self.Standardized_method[2] - self.Standardized_method[1]) + self.Standardized_method[1]
 
 		elif self.Standardized_method[0] == 'zscore':
-			print("  -  utilize ZSCORE standardized method ")
+			print("  ----  utilize ZSCORE standardized method ")
 			self.data = (self.data - self.data.mean()) / self.data.std()
 
 
@@ -87,27 +98,27 @@ class msk:
 					n_components = i + 1
 					break
 
-			print("  -  The top-" + str(n_components) + " component(s) contribute(s) " + str(cont_rate*100) + "% ")
+			print("  ----  The top-" + str(n_components) + " component(s) contribute(s) " + str(cont_rate*100) + "% ")
 
 		else:
 			n_components = self.reduced_n_dim
 
-		print("  -  Choose top-" + str(n_components) + " component(s) as principle component(s) ")
+		print("  ----  Choose top-" + str(n_components) + " component(s) as principle component(s) ")
 
 		if self.method == 'PCA':
-			print("  -  utilize 'PCA' dimensionality reduction method ")
+			print("  ----  utilize 'PCA' dimensionality reduction method ")
 			self.data = PCA(n_components=n_components).fit_transform(self.data)
 			
 		elif self.method == 'FeatureAgglomeration':
-			print("  -  utilize 'FeatureAgglomeration' dimensionality reduction method ")
+			print("  ----  utilize 'FeatureAgglomeration' dimensionality reduction method ")
 			self.data = FeatureAgglomeration(n_clusters=n_components).fit_transform(self.data)
 
 		elif self.method == 'GaussianRandomProjection':
-			print("  -  utilize 'GaussianRandomProjection' dimensionality reduction method ")
+			print("  ----  utilize 'GaussianRandomProjection' dimensionality reduction method ")
 			self.data = random_projection.GaussianRandomProjection(n_components=n_components).fit_transform(self.data)
 
 		elif self.method == 'SparseRandomProjection':
-			print("  -  utilize 'SparseRandomProjection' dimensionality reduction method ")
+			print("  ----  utilize 'SparseRandomProjection' dimensionality reduction method ")
 			self.data = random_projection.SparseRandomProjection(n_components=n_components).fit_transform(self.data)
 
 		self.data = pd.DataFrame(self.data)
@@ -118,10 +129,10 @@ class msk:
 		      - isPlot: plot or not
 		'''
 
-		print(" [*] starting MeanShift combind method ")
+		print(" [INFO] starting MeanShift combind method ")
 
 		self.data_preprocessing()
-		print(" [*] data pre-processing done ")
+		print(" [INFO] data pre-processing done ")
 
 		ind = 0
 		while self.data.shape[1] > self.data.shape[0]:
@@ -129,42 +140,67 @@ class msk:
 			self.dimension_reduction(cont_rate=self.cont_rate_list[ind])
 
 			if self.data.shape[1] > self.data.shape[0]:
-				print("  -  reduced data dimension larger then data amount, alter another contribution rate ")
+				print("  ----  reduced data dimension larger then data amount, alter another contribution rate ")
 				ind += 1
 
 			else:
-				print("  -  reduced data dimension smaller then data amount ")
+				print("  ----  reduced data dimension smaller then data amount ")
 				break
 
-		print(" [*] dimensionality reduction done ")
+		print(" [INFO] dimensionality reduction done ")
 
 		X = np.array(self.data)
 		bandwidth = estimate_bandwidth(X, quantile=0.2, n_samples=10000, random_state=42, n_jobs=2) 
 		ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
 		ms.fit(X)
-		labels = ms.labels_
+		output_label = ms.labels_
 		cluster_centers = ms.cluster_centers_
 
-		labels_unique = np.unique(labels)
+		labels_unique = np.unique(output_label)
 		n_clusters_ = len(labels_unique)
 
-		print(" [*] end ")
+		print(" [INFO] end ")
 
-		if isPlot:
-			plt.figure(1)
-			plt.clf()
+		data_cluster_dict = {}
+		for cls in labels_unique:
+			data_cluster_dict.update({cls:[]})
+		for i in range(output_label.shape[0]):
+			data_cluster_dict[output_label[i]].append(self.data.index.tolist()[i])
+
+		if isPlot and X.shape[1] == 1:
+			x = []
+			for i in range(len(data_cluster_dict)):
+				x.extend(data_cluster_dict[i])
+
+			self.data = self.data.reindex(x)
+			self.data = self.data.reset_index(drop=True)
+
+			j = 0
+			plot_shape = list('.^*o+dp.^*o+dp.^*o+dp^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.')
+			plot_color = list('bgrcmykbgrcmykbgrcmykbgrcmyk')
+			for i in range(len(data_cluster_dict)):
+				cluster_center = cluster_centers[i]
+				plt.plot(self.data.loc[j:j+len(data_cluster_dict[i])-1], color=plot_color[i], marker=plot_shape[i], \
+					linestyle='', linewidth=2.0)
+				tmp_list = list([kk for kk in range(j,j+len(data_cluster_dict[i])-1)])
+				if len(tmp_list) == 0:
+					plt.plot(self.data.loc[j:j+len(data_cluster_dict[i])-1],'o', markerfacecolor=plot_color[i],markeredgecolor='k', markersize=14)    
+				else:
+					plt.plot(np.mean(list([kk for kk in range(j,j+len(data_cluster_dict[i])-1)])), cluster_center[0],'o', markerfacecolor=plot_color[i], markeredgecolor='k', markersize=14)
+				j += len(data_cluster_dict[i])
+			plt.show()
+		else:
 			colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
+			plot_shape = list('.^*o+dp.^*o+dp.^*o+dp^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.')
 
-			for k, col in zip(range(n_clusters_), colors):
-				my_members = labels == k
+			for k, col in zip(list(set(output_label)), colors):
+				my_members = output_label == k
 				cluster_center = cluster_centers[k]
-				plt.plot(X[my_members, 0], X[my_members, 1], col + '.')
+				plt.plot(X[my_members, 0], X[my_members, 1], col + plot_shape[k])
 				plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
 						markeredgecolor='k', markersize=14)
-
-			plt.title('Mean-Shift Estimated number of clusters: %d' % n_clusters_)
 			plt.show()
-
+		return output_label, data_cluster_dict
 
 	def kmeans(self,n_cluster_list=list(range(2,10)),isPlot=False):
 		''' Parameters
@@ -176,10 +212,10 @@ class msk:
 			     interested in, then select "N" with highest SILHOUETTE score 
 		'''
 
-		print(" [*] starting KMeans combind method ")
+		print(" [INFO] starting KMeans combind method ")
 
 		self.data_preprocessing()
-		print(" [*] data pre-processing done ")
+		print(" [INFO] data pre-processing done ")
 
 		ind = 0
 		while self.data.shape[1] > self.data.shape[0]:
@@ -187,14 +223,14 @@ class msk:
 			self.dimension_reduction(cont_rate=self.cont_rate_list[ind])
 
 			if self.data.shape[1] > self.data.shape[0]:
-				print("  -  reduced data dimension larger then data amount, alter another contribution rate ")
+				print("  ----  reduced data dimension larger then data amount, alter another contribution rate ")
 				ind += 1
 
 			else:
-				print("  -  reduced data dimension smaller then data amount ")
+				print("  ----  reduced data dimension smaller then data amount ")
 				break
 
-		print(" [*] dimensionality reduction done ")
+		print(" [INFO] dimensionality reduction done ")
 
 		np.random.seed(42)
 		X = np.array(self.data) 
@@ -205,25 +241,45 @@ class msk:
 				estimator = KMeans(init='random', n_clusters=n, max_iter=1000, n_init=10)
 				cluster_labels = estimator.fit_predict(X)
 				silhouette_avg.append(silhouette_score(X, cluster_labels))
-				print("  -  For n_clusters = " + str(n) + ", the average silhouette_score is : " + str(silhouette_avg[-1]) + ".")
-
+				print("  ----  For n_clusters = " + str(n) + ", the average silhouette_score is : " + str(silhouette_avg[-1]) + ".")
 			n_samples, n_features = X.shape
 			n_clusters = n_cluster_list[silhouette_avg.index(max(silhouette_avg))] #
-			print("  -  Choose n_clusters = " + str(n_clusters) + " with max average silhouette score as final clusters number.")
+			print("  ----  Choose n_clusters = " + str(n_clusters) + " with max average silhouette score as final clusters number.")
 			kmeans = KMeans(init='random', n_clusters=n_clusters, max_iter=1000, n_init=10)
 			output_label = kmeans.fit_predict(X)
 			cluster_centers = kmeans.cluster_centers_
-
 		else:
 			kmeans = KMeans(init='random', n_clusters=n_cluster_list[0], max_iter=1000, n_init=10)
 			output_label = kmeans.fit_predict(X)
 			cluster_centers = kmeans.cluster_centers_
+            
+		data_cluster_dict = {}
+		for cls in set(output_label):
+			data_cluster_dict.update({cls:[]})
+		for i in range(output_label.shape[0]):
+			data_cluster_dict[output_label[i]].append(self.data.index.tolist()[i])
+            
+		if isPlot and X.shape[1] == 1:
+			x = []
+			for i in range(len(data_cluster_dict)):
+				x.extend(data_cluster_dict[i])
 
-		print(" [*] end ")
+			self.data = self.data.reindex(x)
+			self.data = self.data.reset_index(drop=True)
 
-		if isPlot:
-			plt.figure(1)
-			plt.clf()
+			j = 0
+			plot_shape = list('.^*o+dp.^*o+dp.^*o+dp^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.')
+			plot_color = list('bgrcmykbgrcmykbgrcmykbgrcmyk')
+			for i in range(len(data_cluster_dict)):
+				cluster_center = cluster_centers[i]
+				plt.plot(self.data.loc[j:j+len(data_cluster_dict[i])-1], color=plot_color[i], marker=plot_shape[i], \
+					linestyle='', linewidth=2.0)
+				plt.plot(np.mean(list([kk for kk in range(j,j+len(data_cluster_dict[i])-1)])), cluster_center[0],\
+                    'o', markerfacecolor=plot_color[i],
+						markeredgecolor='k', markersize=14)
+				j += len(data_cluster_dict[i])
+			plt.show()
+		else:
 			colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
 			plot_shape = list('.^*o+dp.^*o+dp.^*o+dp^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.')
 
@@ -233,9 +289,11 @@ class msk:
 				plt.plot(X[my_members, 0], X[my_members, 1], col + plot_shape[k])
 				plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
 						markeredgecolor='k', markersize=14)
-			plt.title('K-Means')
 			plt.show()
+		
+		print(" [INFO] end ")
 
+		return output_label, data_cluster_dict
 
 	def combined(self,cluster_num=None,isPlot=False):
 		'''Parameter
@@ -245,10 +303,10 @@ class msk:
 		      - utilize Mean-Shift method to make initial centroids of K-Means
 		'''
 
-		print(" [*] starting meanshift-kmeans combind method ")
+		print(" [INFO] starting meanshift-kmeans combind method ")
 
 		self.data_preprocessing()
-		print(" [*] data pre-processing done ")
+		print(" [INFO] data pre-processing done ")
 
 		ind = 0
 		while self.data.shape[1] > self.data.shape[0]:
@@ -256,14 +314,14 @@ class msk:
 			self.dimension_reduction(cont_rate=self.cont_rate_list[ind])
 
 			if self.data.shape[1] > self.data.shape[0]:
-				print("  -  reduced data dimension larger then data amount, alter another contribution rate ")
+				print("  ----  reduced data dimension larger then data amount, alter another contribution rate ")
 				ind += 1
 
 			else:
-				print("  -  reduced data dimension smaller then data amount ")
+				print("  ----  reduced data dimension smaller then data amount ")
 				break
 
-		print(" [*] dimensionality reduction done ")
+		print(" [INFO] dimensionality reduction done ")
 
 		X = np.array(self.data)
 		bandwidth = estimate_bandwidth(X, quantile=0.2, n_samples=10000, random_state=42, n_jobs=2) 
@@ -292,11 +350,11 @@ class msk:
 					estimator = KMeans(init='random', n_clusters=n, max_iter=1000, n_init=10)
 					cluster_labels = estimator.fit_predict(data)
 					silhouette_avg.append(silhouette_score(data, cluster_labels))
-					print("  -  For n_clusters = " + str(n) + ", the average silhouette_score is : " + str(silhouette_avg[-1]) + ".")
+					print("  ----  For n_clusters = " + str(n) + ", the average silhouette_score is : " + str(silhouette_avg[-1]) + ".")
 
 				# use K-Means to cluster Mean-Shift centroids
 				n_digits = range_n_clusters[silhouette_avg.index(max(silhouette_avg))] #
-				print("  -  Choose n_clusters = " + str(n_digits) + " with max average silhouette score as final clusters number.")
+				print("  ----  Choose n_clusters = " + str(n_digits) + " with max average silhouette score as final clusters number.")
 				kmeans = KMeans(init='random', n_clusters=n_digits, max_iter=1000, n_init=10)
 				output_label = kmeans.fit_predict(data) 
 				cluster_centers = kmeans.cluster_centers_
@@ -318,11 +376,11 @@ class msk:
 		else:
 			output_label = labels
 
-		print(" [*] end ")
+		print(" [INFO] end ")
 
 		if isPlot and X.shape[1] >= 2:
-			plt.figure(2)
-			plt.clf()
+#			plt.figure(2)
+#			plt.clf()
 			colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
 			plot_shape = list('.^*o+dp.^*o+dp.^*o+dp^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.^*o+dp.')
 
@@ -333,7 +391,6 @@ class msk:
 				plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
 						markeredgecolor='k', markersize=14)
 
-			plt.title('MeanShift-KMeans')
 			plt.show()
 
 		dict_2 = {}
